@@ -1,6 +1,5 @@
 import streamlit as st
-import time
-from backend_analysis import run_full_analysis_pipeline, validate_user_input # Ri-aggiungiamo l'import
+from backend_analysis import run_full_analysis_pipeline, validate_user_input
 import os
 import json
 import urllib.parse

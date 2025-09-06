@@ -13,12 +13,19 @@ import os
 import re
 from collections import defaultdict
 import time
+import streamlit as st
 
 # --- SETUP GLOBALE DEL MODULO ---
 
-# Carica le variabili d'ambiente (es. OPENAI_API_KEY)
-load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
+try:
+    # Quando l'app è su Streamlit Cloud, legge i secrets da qui
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+except:
+    # Quando esegui l'app in locale, legge i secrets dal file .env
+    from dotenv import load_dotenv
+    load_dotenv()
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+
 client = openai.OpenAI(api_key=openai_api_key)
 
 # Modello AI da utilizzare per tutte le chiamate
