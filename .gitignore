@@ -1,0 +1,26 @@
+# --- Secrets ---
+# Non committare mai le variabili d'ambiente e le chiavi segrete!
+.env
+
+# --- Ambienti Virtuali ---
+# Ignora la cartella dell'ambiente virtuale. È specifica della tua macchina
+# e può essere ricreata da chiunque usando il file requirements.txt.
+venv/
+.venv/
+env/
+
+# --- Artefatti di Python ---
+# Ignora le cartelle della cache del bytecode e i file compilati.
+# Vengono generati automaticamente da Python.
+__pycache__/
+*.pyc
+
+# --- File di configurazione degli Editor/IDE ---
+# Ignora le impostazioni specifiche del tuo editor (es. VS Code, PyCharm).
+.vscode/
+.idea/
+
+# --- File generati dal Sistema Operativo ---
+# Ignora file di sistema comuni di macOS e Windows.
+.DS_Store
+Thumbs.db
