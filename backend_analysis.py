@@ -14,6 +14,7 @@ import re
 from collections import defaultdict
 import time
 import streamlit as st
+from profession_data import PROFESSIONI_ISTAT_3_DIGIT
 
 # --- SETUP GLOBALE DEL MODULO ---
 
@@ -42,6 +43,93 @@ except Exception as e:
     DATA_JSON = None
 
 # --- DEFINIZIONE DELLE FUNZIONI DI ANALISI ---
+
+def find_professions_locally_as_fallback(user_text, selected_categories_with_reasons):
+    """
+    Funzione di FALLBACK. Se le API INAPP falliscono, usa l'LLM per confrontare
+    il profilo utente con il dizionario locale PROFESSIONI_ISTAT_3_DIGIT.
+    """
+    print("ATTENZIONE: Esecuzione della ricerca di professioni in modalità fallback locale.")
+    
+    # Prepara una stringa con le competenze chiave dell'utente per dare più contesto all'LLM
+    reasoning_summary = []
+    for key, items in selected_categories_with_reasons.items():
+        if isinstance(items, list):
+            for item in items:
+                # Usiamo le descrizioni testuali delle competenze, non solo i codici
+                dict_key = key.replace('best_', '')
+                if dict_key == 'attivita': dict_key = 'attivita_generalizzate' # Correzione nome chiave
+                
+                competenza_desc = DATA_JSON.get(dict_key, {}).get(item.get('code'), 'N/A')
+                reasoning_summary.append(f"- {competenza_desc}: {item.get('reason')}")
+    
+    context_skills = "\n".join(reasoning_summary)
+
+    # Prepara la lista di professioni locali per il prompt
+    local_professions_list = "\n".join([f"{code}: {details['nome']}" for code, details in PROFESSIONI_ISTAT_3_DIGIT.items()])
+
+    prompt = f"""
+    Il sistema di ricerca primario non è disponibile. Devi eseguire un'analisi di emergenza.
+    
+    **Profilo Utente:**
+    "{user_text}"
+
+    **Competenze Chiave e Aspirazioni Rilevate:**
+    {context_skills}
+
+    **Compito:**
+    Basandoti ESCLUSIVAMENTE sul profilo e sulle competenze chiave, analizza la seguente lista di professioni e identifica le 15 più pertinenti.
+
+    **Lista Professioni Disponibili (da cui scegliere):**
+    {local_professions_list}
+
+    **Regole Etiche:**
+    - Ignora genere, età o background. Concentrati sul potenziale e sulle competenze.
+    - Evita stereotipi professionali.
+
+    **Formato di Risposta JSON Richiesto:**
+    Devi restituire una lista di oggetti JSON. Per ogni professione, includi i campi 'code', 'desc', 'importanza' e 'complessita'.
+    Poiché 'importanza' e 'complessita' non sono presenti nei dati locali, assegna a entrambi un valore fisso di 50.
+    ```json
+    [
+        {{"code": "X.X.X", "desc": "Nome Professione...", "importanza": 50, "complessita": 50}},
+        {{"code": "Y.Y.Y", "desc": "Nome Professione...", "importanza": 50, "complessita": 50}}
+    ]
+    ```
+    Restituisci solo il JSON, senza commenti o testo aggiuntivo.
+    """
+    try:
+        response = client.chat.completions.create(
+            model=model_type,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": "Sei un analista di carriere esperto in grado di abbinare profili utente a descrizioni di lavoro, operando in modalità di emergenza."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        raw_content = response.choices[0].message.content.strip()
+        cleaned_json = re.sub(r"```json|```", "", raw_content).strip()
+        return json.loads(cleaned_json)
+    except Exception as e:
+        print(f"Errore critico durante la funzione di fallback locale: {e}")
+        return []
+
+def get_affine_professions_locally(profession_codes):
+    """
+    Funzione di FALLBACK per trovare professioni affini localmente.
+    Una professione è affine se condivide le prime due parti del codice (es. 2.2.x).
+    """
+    print("ATTENZIONE: Esecuzione della ricerca di professioni affini in modalità fallback locale.")
+    affine_professions = []
+    seen_codes = set()
+    for code in profession_codes:
+        if not code: continue
+        prefix = ".".join(code.split('.')[:2]) # Es: da "2.2.1" ottiene "2.2"
+        for local_code, details in PROFESSIONI_ISTAT_3_DIGIT.items():
+            if local_code.startswith(prefix) and local_code not in profession_codes and local_code not in seen_codes:
+                affine_professions.append({"code": local_code, "desc": details.get("nome", "")})
+                seen_codes.add(local_code)
+    return affine_professions[:10] # Limita il numero di risultati
 
 def select_best_categories(user_text, json_data):
     conoscenze_dict = json_data["conoscenze"]
@@ -381,7 +469,7 @@ def validate_user_input(full_user_text):
 
 # --- FUNZIONE PRINCIPALE DELLA PIPELINE --- #
 
-def run_full_analysis_pipeline(user_input_text):
+def run_full_analysis_pipeline(user_input_text, force_fallback=False):
     """
     Esegue l'intera pipeline di analisi, dall'input utente al risultato finale.
     Questa è la funzione che verrà chiamata dal front-end Streamlit.
@@ -415,17 +503,39 @@ def run_full_analysis_pipeline(user_input_text):
             total_input_tokens += usage2.prompt_tokens
             total_output_tokens += usage2.completion_tokens
 
-        api_results = defaultdict(dict)
-        for category, values in [("Conoscenze", selected_categories["best_conoscenze"]),
-                                ("Skills", selected_categories["best_skills"]),
-                                ("attitudini", selected_categories["best_attitudini"]),
-                                ("attivita", selected_categories["best_attivita"])]:
-            for value in values[:2]:
-                api_results[category][value] = chiamata_api(category, value)
-        
-        best_professions = aggregate_best_jobs(api_results, user_category, 0.25, 0.25, 0.25, 0.25)
-        if explicit_job_keyword:
-            best_professions.extend(get_explicit_professions(explicit_job_keyword))
+        best_professions = [] # Inizializziamo la lista come vuota
+
+        # Se il flag di test è attivo, forziamo il fallimento saltando il blocco 'try'
+        if force_fallback:
+            print(">>> TEST MODE: Fallback forzato attivo. <<<")
+        else:
+            # Altrimenti, eseguiamo il normale tentativo API, protetto da un blocco try/except
+            try:
+                api_results = defaultdict(dict)
+                for category, values in [("Conoscenze", selected_categories["best_conoscenze"]),
+                                        ("Skills", selected_categories["best_skills"]),
+                                        ("attitudini", selected_categories["best_attitudini"]),
+                                        ("attivita", selected_categories["best_attivita"])]:
+                    for value in values[:2]:
+                        result = chiamata_api(category, value)
+                        if result:  # Controlliamo che il risultato dell'API non sia nullo
+                            api_results[category][value] = result
+                
+                # Aggreghiamo i risultati solo se le chiamate hanno avuto successo
+                best_professions = aggregate_best_jobs(api_results, user_category, 0.25, 0.25, 0.25, 0.25)
+                
+                # Aggiungiamo le professioni esplicite se presenti
+                if explicit_job_keyword:
+                    best_professions.extend(get_explicit_professions(explicit_job_keyword))
+
+            except Exception as api_error:
+                print(f"❌ Errore durante le chiamate API INAPP: {api_error}. Si attiva il fallback.")
+                best_professions = [] # In caso di errore, ci assicuriamo che la lista sia vuota per attivare il fallback
+
+        # Controllo e attivazione del fallback se la lista è vuota (per errore API, nessun risultato o test forzato)
+        if not best_professions:
+            print("⚠️  API INAPP non ha prodotto risultati. Attivazione della ricerca di fallback locale.")
+            best_professions = find_professions_locally_as_fallback(user_input_text, selected_categories_with_reasons)
 
         ranked_results, usage3 = rank_professions(user_input_text, best_professions)
         if usage3:
@@ -438,10 +548,22 @@ def run_full_analysis_pipeline(user_input_text):
             total_output_tokens += usage4["completion_tokens"]
         
         main_profession_codes = [prof["code"] for prof in audited_ranked_results]
-        affine_professions = get_affine_professions(main_profession_codes)
         
-        # 2. Calcolo costo
-        prices = {"4o-mini": (0.00015, 0.00060)}
+        try:
+            # Tentativo primario di ottenere professioni affini via API
+            affine_professions = get_affine_professions(main_profession_codes)
+            
+            # Se l'API risponde ma con una lista vuota, lo consideriamo un fallimento e attiviamo il fallback
+            if not affine_professions and main_profession_codes:
+                raise ValueError("L'API ha restituito una lista vuota per le professioni affini.")
+
+        except Exception as e:
+            # Se si verifica un errore di qualsiasi tipo, si attiva il fallback locale
+            print(f"❌ API per professioni affini non disponibile ({e}). Attivazione fallback locale.")
+            affine_professions = get_affine_professions_locally(main_profession_codes)
+        
+        # 2. Calcolo costo hardcodato per il fe, se si intende ottenere un dettaglio dinamico inserire la porpria chiave lang smith 
+        prices = {"gpt-4o-mini": (0.00015, 0.00060)}
         price_input, price_output = prices.get(model_type, (0, 0))
         cost = (total_input_tokens / 1000 * price_input) + (total_output_tokens / 1000 * price_output)
 

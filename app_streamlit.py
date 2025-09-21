@@ -54,8 +54,12 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # --- FUNZIONE DI ANALISI CON CACHING ---
 @st.cache_data(show_spinner=False)
-def run_analysis(full_user_text):
-    return run_full_analysis_pipeline(full_user_text)
+def run_analysis(full_user_text, force_fallback=False):
+    """
+    Funzione wrapper che chiama la pipeline di backend e gestisce la cache.
+    Ora accetta l'argomento force_fallback per passarlo al backend.
+    """
+    return run_full_analysis_pipeline(user_input_text=full_user_text, force_fallback=force_fallback)
 
 # --- INIZIALIZZAZIONE SESSION STATE ---
 if "messages" not in st.session_state:
@@ -72,6 +76,8 @@ if "analysis_triggered" not in st.session_state:
 # --- LAYOUT SIDEBAR ---
 with st.sidebar:
     st.title("Report di Analisi")
+    # checkbox di debug in cima alla sidebar
+    force_fallback_test = st.checkbox("🧪 Forzare test di fallback")
     st.caption("_Dettagli del tuo profilo elaborati dalla nostra IA._")
     st.divider()
 
@@ -149,7 +155,8 @@ st.divider()
 
 if st.session_state.get("analysis_triggered", False):
     with st.spinner("Sto analizzando il tuo profilo... Potrebbe volerci qualche istante..."):
-        results = run_analysis(st.session_state.full_text)
+        # Passa il valore del checkbox alla funzione di analisi
+        results = run_analysis(st.session_state.full_text, force_fallback=force_fallback_test)
     
     st.session_state.analysis_results = results
     st.session_state.analysis_done = True

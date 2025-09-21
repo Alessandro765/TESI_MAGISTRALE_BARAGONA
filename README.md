@@ -108,6 +108,45 @@ Dipendenze necesarie:
   * **Gestione Errori:** **L'intera funzione è avvolta in un blocco** **try...except** **che cattura qualsiasi errore imprevisto durante la pipeline e lo restituisce in un formato gestibile dal frontend, prevenendo crash.**
   * **Aggregazione Risultati:** **Compone un unico dizionario finale contenente tutti i dati necessari per la visualizzazione nel frontend (professioni consigliate, dati per il ragionamento, statistiche di utilizzo, etc.).**
 
+## 🛡️ Meccanismo di Fallback per la Ricerca delle Professioni
+
+Per garantire la massima affidabilità e un'esperienza utente senza interruzioni, l'applicazione è dotata di un robusto meccanismo di fallback. Poiché il flusso di lavoro primario dipende dalle API esterne di INAPP, che potrebbero non essere disponibili per downtime o altri errori, questo sistema assicura che l'utente riceva sempre un'analisi di alta qualità.
+
+### Come Funziona
+
+Il processo di analisi può seguire due percorsi distinti:
+
+#### 1. Percorso Primario (API INAPP)
+
+- Di default, l'applicazione interroga le API INAPP per mappare le competenze, le attitudini e le conoscenze identificate nel profilo dell'utente a una lista di professioni pertinenti.
+- Questo metodo è efficiente e si basa sulla mappatura strutturata fornita dal servizio esterno.
+
+#### 2. Percorso di Fallback (Ricerca Locale con IA)
+
+Il fallback si attiva **automaticamente** se si verifica una delle seguenti condizioni:
+
+- Le chiamate all'API INAPP falliscono a causa di errori di rete, timeout o errori del server (catturati da un blocco `try/except`).
+- Le API rispondono, ma non restituiscono risultati significativi (es. una lista vuota).
+
+Quando il fallback è attivo, il sistema esegue i seguenti passaggi:
+
+1. **Fonte Dati Locale**: Invece di interrogare l'API, il backend carica il dizionario `PROFESSIONI_ISTAT_3_DIGIT` dal file `profession_data.py`.
+   2.**Abbinamento Semantico via LLM**: Poiché il dizionario locale non contiene una mappatura diretta "competenza -> professione", viene sfruttata l'intelligenza.
+2. **Prompt di Emergenza**: L'IA riceve un prompt specifico che include il profilo completo dell'utente, le sue competenze chiave e l'intera lista delle professioni locali. Il suo compito è eseguire un'analisi semantica per trovare le corrispondenze più logiche e pertinenti.
+3. **Continuità della Pipeline**: La lista di professioni generata dal fallback viene re-iniettata nella pipeline di analisi esattamente come se provenisse dall'API. Le fasi successive (ranking, fairness audit, ricerca di professioni affini) procedono senza alcuna interruzione.
+
+Questo approccio garantisce non solo la continuità del servizio, ma anche la qualità del risultato di emergenza, che si basa su un ragionamento contestuale anziché su semplici parole chiave.
+
+### Come Testare il Meccanismo di Fallback
+
+Per facilitare lo sviluppo e il debug, è stato implementato un modo semplice per forzare l'attivazione del fallback direttamente dall'interfaccia utente.
+
+1.**Attiva il Flag di Test**: Nel file `app_streamlit.py`, è stato aggiunto un checkbox nella sidebar:  ``🧪 Forzare test di fallback``
+2.**Esegui l'Analisi**: Selezionando questa casella prima di cliccare su "Analizza il mio profilo", la funzione di backend `run_full_analysis_pipeline` viene invocata con il parametro `force_fallback=True`.
+3.  **Verifica l'Output**: Questo flag bypassa il blocco `try` delle chiamate API e attiva immediatamente la logica di ricerca locale. Per conferma, nel terminale in cui è in esecuzione Streamlit appariranno messaggi di avviso come:
+    ``>>> TEST MODE: Fallback forzato attivo. <<<     ⚠️  API INAPP non ha prodotto risultati. Attivazione della ricerca di fallback locale.``
+Questo permette di testare e validare il comportamento del sistema di emergenza in qualsiasi momento, senza dover attendere un reale disservizio dell'API esterna.
+
 ---
 
 ## Parte 2: L'Interfaccia Utente (**app_streamlit.py**)
@@ -191,3 +230,21 @@ Dipendenze necesarie:
   ```
   streamlit run app_streamlit.py
   ```
+
+## TEST
+
+### Esempio 1: Il Neolaureato Tecnico
+
+Sono un neolaureato in Ingegneria Informatica. Durante gli studi mi sono appassionato allo sviluppo software, in particolare al linguaggio Python e allo sviluppo di applicazioni web. Ho realizzato un piccolo progetto personale per un sito di e-commerce e mi piace molto l'idea di creare strumenti che risolvano problemi reali. Sono una persona logica, precisa e mi piace trovare soluzioni efficienti a problemi complessi. Cerco un lavoro dove possa applicare le mie competenze di programmazione e continuare a imparare nuove tecnologie.
+
+### Esempio 2: Persona in Cerca di Riconversione Professionale
+
+Ho lavorato per 10 anni come addetta alle vendite in un grande magazzino, ma sento che quel lavoro non fa più per me. Sono stanca di pensare solo ai numeri. La cosa che mi piaceva di più era parlare con le persone e aiutarle a trovare ciò di cui avevano veramente bisogno. Sono una persona molto empatica, so ascoltare e mi sento realizzata quando posso dare un supporto concreto agli altri. Ho fatto anche del volontariato in una comunità per anziani. Vorrei trovare un lavoro dove queste mie qualità siano al centro di tutto.
+
+### Esempio 3: L'Artigiano Creativo
+
+La mia vera passione è lavorare con le mani. Nel mio tempo libero mi dedico al restauro di vecchi mobili in legno, mi piace ridare vita a oggetti che altri butterebbero. Uso molto il legno ma mi affascina anche la lavorazione del metallo. Sono molto preciso, quasi maniacale per i dettagli, e credo nella qualità e nella durata delle cose. Non mi piace stare fermo a una scrivania, ho bisogno di creare qualcosa di concreto e vederlo finito. Cerco un'attività che mi permetta di usare la mia manualità e la mia creatività.
+
+### Esempio 4: Il Profilo Orientato al Business e alla Gestione
+
+Ho una laurea triennale in economia e ho lavorato per due anni come assistente marketing. Mi occupavo di analizzare i dati delle campagne e di preparare report per il mio responsabile. Mi piace molto l'aspetto strategico del lavoro: capire il mercato, pianificare le attività e coordinare le persone per raggiungere un obiettivo. Ho buone doti organizzative e comunicative. Il mio obiettivo è crescere professionalmente e arrivare un giorno a gestire un team o dei progetti importanti in autonomia.
