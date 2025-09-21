@@ -194,6 +194,7 @@ def analyze_profile_callback():
     if user_prompt:
         st.session_state.full_text += user_prompt + "\n"
         st.session_state.messages.append({"role": "user", "content": user_prompt})
+        st.session_state.messages.append({"role": "ai", "content": "Perfetto. C'è altro che vorresti aggiungere?"})
     
     if not st.session_state.full_text.strip() or st.session_state.full_text.isspace():
         st.warning("Per favore, descriviti prima di chiedere l'analisi.")
@@ -205,7 +206,7 @@ def analyze_profile_callback():
 
     if validation_result and validation_result.get("is_sufficient"):
         # Se la validazione ha successo, aggiungi i messaggi e imposta il trigger
-        st.session_state.messages.append({"role": "user", "content": "No, grazie. Sono pronto."})
+        st.session_state.messages.append({"role": "user", "content": "No, grazie. Ho finito di aggiungere dettagli. Puoi procedere con l'analisi."})
         st.session_state.messages.append({"role": "ai", "content": "Ok, iniziamo l'analisi!"})
         st.session_state.analysis_triggered = True
     else:

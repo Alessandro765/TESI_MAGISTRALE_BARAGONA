@@ -2,6 +2,13 @@
 
  **Career Compass AI** **è un'applicazione web avanzata progettata per fornire orientamento professionale personalizzato, etico e spiegabile. Partendo da una descrizione testuale libera fornita dall'utente, il sistema sfrutta un'architettura a due componenti—un potente** **motore di analisi (backend)** **e un'**interfaccia utente interattiva (frontend)**—per suggerire le professioni più adatte secondo la classificazione ISTAT.**
 
+## Fonti e Ringraziamenti
+
+Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fonti, che si ringraziano per il loro contributo essenziale:
+
+* **BIP (Business Integration Partners):** Un ringraziamento speciale a BIP per il supporto fondamentale al progetto, che include la fornitura del dataset `profession_data.py` (contenente la classificazione ISTAT a 3 digit alla cui realizzazione ho avuto il piacere di contribuire) e della chiave per l'accesso alle API di OpenAI.
+* **ISTAT e INAPP:** L'applicazione utilizza la Classificazione delle Professioni (CP2021) e le API pubbliche fornite da ISTAT e INAPP come fonte primaria per l'analisi e la mappatura delle competenze professionali.
+
 ### Indice
 
 1. FunzionalitàChiave
@@ -10,20 +17,18 @@
 4. Setup e Installazione
 5. Approfondimento sul Backend (backend_analysis.py)
 
-    ·       Descrizione delle Funzioni
+   ·       Descrizione delle Funzioni
 
-    ·       Ottimizzazione delle Performance
+   ·       Ottimizzazione delle Performance
 
-    ·       Monitoraggio e Tracing con LangSmith
+   ·       Monitoraggio e Tracing con LangSmith
 
-    ·       Meccanismo di Fallback
-
+   ·       Meccanismo di Fallback
 6. Approfondimento sul Frontend (app_streamlit.py)
 
-    ·       Architettura e Componenti
+   ·       Architettura e Componenti
 
-    ·       Struttura del Layout
-
+   ·       Struttura del Layout
 7. Fonti Dati
 8. Esempi di Test
 
@@ -115,6 +120,19 @@
   ```
   streamlit run app_streamlit.py
   ```
+
+## Attenzione a deployare le variabili nell'env attraverso
+
+#### Chiave per le API di OpenAI
+
+OPENAI_API_KEY = "codice chiave opean ai"
+
+#### Configurazione per LangSmith
+
+LANGCHAIN_TRACING_V2 = "true"
+LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
+LANGCHAIN_API_KEY = "codice chiave LangSmith"
+LANGCHAIN_PROJECT = "Career-Compass-AI"
 
 ---
 
