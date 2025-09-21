@@ -5,7 +5,6 @@ Viene importato e utilizzato dal front-end Streamlit (app_streamlit.py).
 Non contiene codice di esecuzione diretta.
 """
 
-import openai
 import json
 import requests
 from dotenv import load_dotenv
@@ -15,6 +14,20 @@ from collections import defaultdict
 import time
 import streamlit as st
 from profession_data import PROFESSIONI_ISTAT_3_DIGIT
+import concurrent.futures
+from types import SimpleNamespace
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+from langsmith import traceable # Importiamo il decoratore
+
+# Modello AI da utilizzare per tutte le chiamate
+model_type = "gpt-4o-mini"
+
+# Carica TUTTE le variabili d'ambiente
+load_dotenv()
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
+os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT")
 
 # --- SETUP GLOBALE DEL MODULO ---
 
@@ -27,10 +40,13 @@ except:
     load_dotenv()
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
-client = openai.OpenAI(api_key=openai_api_key)
-
-# Modello AI da utilizzare per tutte le chiamate
-model_type = "gpt-4o-mini"
+# Creiamo un client LLM che verrà tracciato automaticamente da LangSmith
+# Lo configuriamo una sola volta e lo riutilizziamo in tutte le funzioni
+llm_client = ChatOpenAI(
+    model=model_type,
+    api_key=openai_api_key,
+    temperature=0.1 # Puoi impostare una temperatura di default qui
+)
 
 # Ottimizzazione: Carica i file JSON una sola volta all'avvio del modulo, invece di ricaricarli ad ogni chiamata.
 try:
@@ -43,7 +59,7 @@ except Exception as e:
     DATA_JSON = None
 
 # --- DEFINIZIONE DELLE FUNZIONI DI ANALISI ---
-
+@traceable
 def find_professions_locally_as_fallback(user_text, selected_categories_with_reasons):
     """
     Funzione di FALLBACK. Se le API INAPP falliscono, usa l'LLM per confrontare
@@ -99,19 +115,19 @@ def find_professions_locally_as_fallback(user_text, selected_categories_with_rea
     Restituisci solo il JSON, senza commenti o testo aggiuntivo.
     """
     try:
-        response = client.chat.completions.create(
+        response = llm_client.invoke(
+            [
+                SystemMessage(content="Sei un analista di carriere esperto in grado di abbinare profili utente a descrizioni di lavoro, operando in modalità di emergenza."),
+                HumanMessage(content=prompt)
+            ],
             model=model_type,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": "Sei un analista di carriere esperto in grado di abbinare profili utente a descrizioni di lavoro, operando in modalità di emergenza."},
-                {"role": "user", "content": prompt}
-            ]
+            temperature=0.2
         )
-        raw_content = response.choices[0].message.content.strip()
+        raw_content = response.content.strip()
         cleaned_json = re.sub(r"```json|```", "", raw_content).strip()
         return json.loads(cleaned_json)
     except Exception as e:
-        print(f"Errore critico durante la funzione di fallback locale: {e}")
+        print(f"❌ Errore critico durante la funzione di fallback locale: {e}")
         return []
 
 def get_affine_professions_locally(profession_codes):
@@ -181,17 +197,21 @@ def select_best_categories(user_text, json_data):
     ```
     """
     try:
-        response = client.chat.completions.create(
+        # Usiamo il client LangChain con il suo metodo .invoke()
+        response = llm_client.invoke([
+            SystemMessage(content="Sei un assistente AI etico e responsabile, specializzato nell'analisi di profili professionali in modo imparziale."),
+            HumanMessage(content=prompt)
+            ],
             model=model_type,
-            temperature=0.1,
-            messages=[{"role": "system", "content": "Sei un assistente AI etico e responsabile, specializzato nell'analisi di profili professionali in modo imparziale."},
-                    {"role": "user", "content": prompt}]
+            temperature=0.2
         )
-        raw_content = response.choices[0].message.content.strip()
+        
+        # Estraiamo il testo direttamente da .content
+        raw_content = response.content.strip()
         cleaned_json = re.sub(r"```json|```", "", raw_content).strip()
         result = json.loads(cleaned_json)
 
-        # Controllo di validità dei codici
+        # Il controllo di validità rimane identico
         for key, valid_dict in [("best_conoscenze", conoscenze_dict), 
                                 ("best_skills", skills_dict), 
                                 ("best_attitudini", attitudini_dict),
@@ -199,7 +219,13 @@ def select_best_categories(user_text, json_data):
             if key in result:
                 result[key] = [item for item in result[key] if isinstance(item, dict) and item.get("code") in valid_dict]
         
-        return result, response.usage
+        # Estraiamo le info sui token e le rendiamo compatibili
+        usage_info = response.response_metadata.get('token_usage', {})
+        usage = SimpleNamespace(
+            prompt_tokens=usage_info.get('prompt_tokens', 0),
+            completion_tokens=usage_info.get('completion_tokens', 0)
+        )
+        return result, usage
     except Exception as e:
         print(f"❌ Error in select_best_categories: {e}")
         return None, None
@@ -237,15 +263,24 @@ def classify_user_category(user_text):
     **Rispondi esclusivamente con due numeri separati da una virgola, senza aggiungere testo.**
     """
     try:
-        response = client.chat.completions.create(
+        response = llm_client.invoke([
+            SystemMessage(content="Sei un esperto imparziale nella classificazione delle professioni ISTAT."),
+            HumanMessage(content=prompt)
+            ],
             model=model_type,
-            temperature=0.1,
-            messages=[{"role": "system", "content": "Sei un esperto imparziale nella classificazione delle professioni ISTAT."},
-                    {"role": "user", "content": prompt}]
+            temperature=0.2
         )
-        categories = response.choices[0].message.content.strip()
+        
+        categories = response.content.strip()
         categories_list = [cat.strip() for cat in categories.split(",") if cat.strip().isdigit()]
-        return categories_list[:2], response.usage
+        
+        # Estraiamo le info sui token e le rendiamo compatibili
+        usage_info = response.response_metadata.get('token_usage', {})
+        usage = SimpleNamespace(
+            prompt_tokens=usage_info.get('prompt_tokens', 0),
+            completion_tokens=usage_info.get('completion_tokens', 0)
+        )
+        return categories_list[:2], usage
     except Exception as e:
         print(f"❌ Error in classify_user_category: {e}")
         return [], None
@@ -308,20 +343,48 @@ def aggregate_best_jobs(api_results, user_category, w_B, w_C, w_D, w_G):
     sorted_jobs = sorted(job_scores.items(), key=lambda x: -x[1]["total_score"])
     return [{"code": code, "desc": job["desc"], "importanza": job["importanza"], "complessita": job["complessita"], "total_score": job["total_score"]} for code, job in sorted_jobs][:40]
 
+@traceable
 def get_affine_professions(profession_codes):
+    """
+    Versione PARALLELIZZATA della funzione.
+    Esegue le chiamate API per trovare professioni affini in modo concorrente.
+    """
     affine_professions = []
-    for code in profession_codes:
-        if not code: continue
+    # Usiamo un set per evitare di aggiungere duplicati
+    seen_codes = set(p for p in profession_codes if p)
+
+    # Helper function per eseguire una singola chiamata API
+    def fetch_affine_for_code(code):
+        if not code:
+            return []
         url = f"https://api.inapp.org/professioni/search.php?codice={code}&flag=31"
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=10) # Aggiunto timeout
             response.raise_for_status()
-            data = response.json()
-            if isinstance(data, list):
-                for item in data:
-                    affine_professions.append({"code": item.get("pkLivello", ""), "desc": item.get("desc_livello", "")})
+            return response.json()
         except (requests.exceptions.RequestException, json.JSONDecodeError):
-            continue
+            # In caso di errore per un singolo codice, restituisce una lista vuota e non blocca le altre
+            return []
+
+    # max_workers definisce quanti "lavoratori" (thread) eseguono le chiamate contemporaneamente
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Sottomettiamo tutte le chiamate API al pool di thread
+        future_to_code = {executor.submit(fetch_affine_for_code, code): code for code in seen_codes}
+        
+        # Raccogliamo i risultati man mano che diventano disponibili
+        for future in concurrent.futures.as_completed(future_to_code):
+            try:
+                data = future.result()
+                if isinstance(data, list):
+                    for item in data:
+                        code = item.get("pkLivello", "")
+                        # Aggiungiamo solo se non è un duplicato e non è uno dei codici originali
+                        if code and code not in seen_codes:
+                            affine_professions.append({"code": code, "desc": item.get("desc_livello", "")})
+                            seen_codes.add(code)
+            except Exception as exc:
+                print(f'La chiamata per professioni affini ha generato un\'eccezione: {exc}')
+
     return affine_professions
 
 def rank_professions(user_text, professions):
@@ -349,19 +412,26 @@ def rank_professions(user_text, professions):
         **Restituisci solo il JSON, senza aggiungere testo.**
     """
     try:
-        response = client.chat.completions.create(
+        response = llm_client.invoke([
+            SystemMessage(content="Sei un esperto di orientamento professionale, etico e imparziale, che valuta le professioni basandosi sul potenziale e le competenze dell'utente."),
+            HumanMessage(content=prompt)
+            ],
             model=model_type,
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": "Sei un esperto di orientamento professionale, etico e imparziale, che valuta le professioni basandosi sul potenziale e le competenze dell'utente."},
-                {"role": "user", "content": prompt}
-            ]
+            temperature=0.2
         )
-        raw_content = response.choices[0].message.content.strip()
+        
+        raw_content = response.content.strip()
         cleaned_json = re.sub(r"```json|```", "", raw_content).strip()
         ranked_professions = json.loads(cleaned_json)
         ranked_professions.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-        return ranked_professions[:5], response.usage
+        
+        # Estraiamo le info sui token e le rendiamo compatibili
+        usage_info = response.response_metadata.get('token_usage', {})
+        usage = SimpleNamespace(
+            prompt_tokens=usage_info.get('prompt_tokens', 0),
+            completion_tokens=usage_info.get('completion_tokens', 0)
+        )
+        return ranked_professions[:5], usage
     except Exception as e:
         print(f"❌ Error in rank_professions: {e}")
         return [], None
@@ -392,22 +462,24 @@ def perform_fairness_audit(user_text, ranked_professions):
         **Restituisci solo il JSON, senza aggiungere testo.**
         """
         try:
-            response = client.chat.completions.create(
+            response = llm_client.invoke([
+                SystemMessage(content="Sei un revisore AI specializzato in etica e fairness algoritmica, con il compito di scoprire bias nascosti in analisi multigruppo."),
+                HumanMessage(content=prompt)
+                ],
                 model=model_type,
-                temperature=0.1,
-                messages=[
-                    {"role": "system", "content": "Sei un revisore AI specializzato in etica e fairness algoritmica, con il compito di scoprire bias nascosti in analisi multigruppo."},
-                    {"role": "user", "content": prompt}
-                ]
+                temperature=0.2
             )
-            raw_content = response.choices[0].message.content.strip()
+            
+            raw_content = response.content.strip()
             cleaned_json = re.sub(r"```json|```", "", raw_content).strip()
             audit_result = json.loads(cleaned_json)
             profession['fairness_audit'] = audit_result
             
-            if response.usage:
-                total_usage["prompt_tokens"] += response.usage.prompt_tokens
-                total_usage["completion_tokens"] += response.usage.completion_tokens
+            # Accumuliamo i token direttamente dal dizionario
+            usage_info = response.response_metadata.get('token_usage', {})
+            if usage_info:
+                total_usage["prompt_tokens"] += usage_info.get('prompt_tokens', 0)
+                total_usage["completion_tokens"] += usage_info.get('completion_tokens', 0)
 
         except Exception as e:
             print(f"❌ Errore durante l'audit di fairness per '{profession_desc}': {e}")
@@ -451,24 +523,23 @@ def validate_user_input(full_user_text):
     **Restituisci solo il JSON.**
     """
     try:
-        response = client.chat.completions.create(
+        response = llm_client.invoke(
+            [
+                SystemMessage(content="Sei un assistente AI rigoroso che valuta la completezza dei profili utente per l'orientamento professionale, seguendo regole ferree."),
+                HumanMessage(content=prompt)
+            ],
             model=model_type,
-            temperature=0.0, # Temperatura a zero per la massima coerenza
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": "Sei un assistente AI rigoroso che valuta la completezza dei profili utente per l'orientamento professionale, seguendo regole ferree."},
-                {"role": "user", "content": prompt}
-            ]
+            response_format={"type": "json_object"}, # Manteniamo il formato JSON
+            temperature=0.0
         )
-        result = json.loads(response.choices[0].message.content)
+        result = json.loads(response.content)
         return result
     except Exception as e:
         print(f"❌ Errore durante la validazione dell'input: {e}")
-        # In caso di errore, bypassiamo il controllo per non bloccare l'utente
         return {"is_sufficient": True, "feedback": "Controllo di validazione saltato a causa di un errore."}
 
 # --- FUNZIONE PRINCIPALE DELLA PIPELINE --- #
-
+@traceable
 def run_full_analysis_pipeline(user_input_text, force_fallback=False):
     """
     Esegue l'intera pipeline di analisi, dall'input utente al risultato finale.
@@ -510,23 +581,47 @@ def run_full_analysis_pipeline(user_input_text, force_fallback=False):
             print(">>> TEST MODE: Fallback forzato attivo. <<<")
         else:
             # Altrimenti, eseguiamo il normale tentativo API, protetto da un blocco try/except
+            # Altrimenti, eseguiamo il normale tentativo API in PARALLELO
             try:
                 api_results = defaultdict(dict)
-                for category, values in [("Conoscenze", selected_categories["best_conoscenze"]),
-                                        ("Skills", selected_categories["best_skills"]),
-                                        ("attitudini", selected_categories["best_attitudini"]),
-                                        ("attivita", selected_categories["best_attivita"])]:
-                    for value in values[:2]:
-                        result = chiamata_api(category, value)
-                        if result:  # Controlliamo che il risultato dell'API non sia nullo
-                            api_results[category][value] = result
+                tasks_to_run = []
                 
-                # Aggreghiamo i risultati solo se le chiamate hanno avuto successo
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    # 1. Sottomettiamo tutte le chiamate per le categorie (conoscenze, skills, etc.)
+                    for category, values in [("Conoscenze", selected_categories["best_conoscenze"]),
+                                            ("Skills", selected_categories["best_skills"]),
+                                            ("attitudini", selected_categories["best_attitudini"]),
+                                            ("attivita", selected_categories["best_attivita"])]:
+                        for value in values[:2]:
+                            # Sottomettiamo il task e salviamo il "future" insieme ai suoi metadati
+                            future = executor.submit(chiamata_api, category, value)
+                            tasks_to_run.append({"type": "category", "category": category, "value": value, "future": future})
+
+                    # 2. Sottomettiamo anche la chiamata per la keyword esplicita, se presente
+                    explicit_future = None
+                    if explicit_job_keyword:
+                        explicit_future = executor.submit(get_explicit_professions, explicit_job_keyword)
+
+                    # 3. Raccogliamo i risultati delle chiamate per le categorie
+                    for task in tasks_to_run:
+                        try:
+                            result = task["future"].result(timeout=10) # Aspetta max 10 secondi per questo task
+                            if result:
+                                api_results[task["category"]][task["value"]] = result
+                        except Exception as e:
+                            print(f"Chiamata API per {task['category']}/{task['value']} fallita: {e}")
+                
+                # Aggreghiamo i risultati ottenuti in parallelo
                 best_professions = aggregate_best_jobs(api_results, user_category, 0.25, 0.25, 0.25, 0.25)
-                
-                # Aggiungiamo le professioni esplicite se presenti
-                if explicit_job_keyword:
-                    best_professions.extend(get_explicit_professions(explicit_job_keyword))
+
+                # 4. Raccogliamo il risultato della keyword esplicita e lo aggiungiamo
+                if explicit_future:
+                    try:
+                        explicit_prof_result = explicit_future.result(timeout=10)
+                        if explicit_prof_result:
+                            best_professions.extend(explicit_prof_result)
+                    except Exception as e:
+                        print(f"Chiamata API per keyword esplicita '{explicit_job_keyword}' fallita: {e}")
 
             except Exception as api_error:
                 print(f"❌ Errore durante le chiamate API INAPP: {api_error}. Si attiva il fallback.")

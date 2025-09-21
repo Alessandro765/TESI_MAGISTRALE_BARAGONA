@@ -1,4 +1,13 @@
+# Core App Framework
 streamlit
-openai
-python-dotenv
+
+# API Clients
 requests
+
+# LangSmith & LangChain Integration
+langchain
+langchain-openai
+langsmith
+
+# Environment Variables
+python-dotenv

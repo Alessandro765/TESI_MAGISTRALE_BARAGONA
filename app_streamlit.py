@@ -48,6 +48,19 @@ CUSTOM_CSS = """
     [data-testid="stSidebar"] .st-emotion-cache-12w0qpk summary p { font-weight: 600 !important; font-size: 1.1em !important; color: #004C99 !important; }
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] li { font-size: 1.0em !important; color: #495057 !important; }
     [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .st-emotion-cache-1q8dd3e { font-size: 1.2em !important; color: #343a40 !important; font-weight: 600; }
+
+    /* Stile per il pulsante arancione di reset */
+    [data-testid="stHorizontalBlock"] > div:nth-child(3) .stButton > button {
+        background-color: #ffc107;
+        border-color: #ffc107;
+        color: #212529;
+    }
+    [data-testid="stHorizontalBlock"] > div:nth-child(3) .stButton > button:hover {
+        background-color: #e0a800;
+        border-color: #d39e00;
+        color: white;
+    }
+
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -139,9 +152,10 @@ with st.sidebar:
 # --- LAYOUT PRINCIPALE (CHAT) ---
 st.title("🧭 Career Compass AI")
 intro_text = """
-Usa la chat qui sotto per descriverti. Puoi aggiungere più informazioni con il pulsante <b>'Aggiungi dettaglio'</b>.
-<br>Quando hai finito, premi <b>'Analizza il mio profilo'</b>. Il tuo report personalizzato apparirà nella barra laterale.
-<br><br>💡 <i>Consiglio:</i> Fornisci dettagli pertinenti al lavoro che intendi approfondire  per ottenere un'analisi realmente accurata!
+Usa la chat qui sotto per descriverti. Premi <b>'Aggiungi dettaglio'</b> per inserire più informazioni.
+<br>Quando sei pronto, clicca su <b>'Analizza il mio profilo'</b> per ricevere il tuo report personalizzato nella barra laterale.
+<br>Usa <b>'Termina analisi'</b> in qualsiasi momento per ricominciare da capo.
+<br><br>💡 <i>Consiglio:</i> Fornisci dettagli pertinenti al lavoro che intendi approfondire per ottenere un'analisi realmente accurata!
 """
 st.markdown(f'<div class="intro-box">{intro_text}</div>', unsafe_allow_html=True)
 
@@ -204,6 +218,15 @@ def analyze_profile_callback():
 # Etichetta personalizzata, visibile e stilizzata
 st.markdown("<h5>Scrivi qui per descriverti...</h5>", unsafe_allow_html=True)
 
+def reset_analysis_callback():
+    """Resetta completamente lo stato della sessione per una nuova analisi."""
+    st.session_state.messages = [{"role": "ai", "content": "Ciao! Sono Career Compass AI. Per iniziare, descrivimi le tue passioni, le tue esperienze e cosa cerchi in un lavoro. Più dettagli mi fornisci, più accurata sarà la mia analisi."}]
+    st.session_state.full_text = ""
+    st.session_state.analysis_results = None
+    st.session_state.analysis_done = False
+    st.session_state.analysis_triggered = False
+    st.session_state.user_input_area = ""
+
 # Problemi con alcuni parametri di deafult in text_area, quindi usiamo key e gestiamo lo stato manualmente
 user_prompt_input = st.text_area(
     label="Input utente", # L'etichetta ora è nascosta, ma serve per il funzionamento interno
@@ -212,11 +235,13 @@ user_prompt_input = st.text_area(
     label_visibility="collapsed" # nasconde l'etichetta
 )
 
-col1, col2, _ = st.columns([1, 1, 2])
+col1, col2, col3 = st.columns([1, 1, 1])
 with col1:
     st.button("Aggiungi dettaglio", on_click=add_detail_callback,  disabled=not st.session_state.get("user_input_area", "").strip(), use_container_width=True)
 with col2:
-    st.button("✅ Analizza il mio profilo", type="primary", use_container_width=True, on_click=analyze_profile_callback)
+    st.button("Analizza il mio profilo", type="primary", use_container_width=True, on_click=analyze_profile_callback)
+with col3:
+    st.button("Termina analisi", on_click=reset_analysis_callback, use_container_width=True)
 
 # --- FOOTER ---
 footer = """

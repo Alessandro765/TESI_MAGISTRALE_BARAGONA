@@ -1,6 +1,4 @@
-###############################################################################
-### Questo va aggiornato con il file inviato da 131 professioni             ###
-###############################################################################
+### professioni istat aggiornate al terzo digit aggiornato al 21/09/2025 ###
 
 PROFESSIONI_ISTAT_3_DIGIT = {
   "1.1.1": {
