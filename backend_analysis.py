@@ -127,7 +127,7 @@ def find_professions_locally_as_fallback(user_text, selected_categories_with_rea
         cleaned_json = re.sub(r"```json|```", "", raw_content).strip()
         return json.loads(cleaned_json)
     except Exception as e:
-        print(f"❌ Errore critico durante la funzione di fallback locale: {e}")
+        print(f"Errore critico durante la funzione di fallback locale: {e}")
         return []
 
 def get_affine_professions_locally(profession_codes):
@@ -148,6 +148,13 @@ def get_affine_professions_locally(profession_codes):
     return affine_professions[:10] # Limita il numero di risultati
 
 def select_best_categories(user_text, json_data):
+    
+    """
+    Utilizza l'LLM per tradurre il testo dell'utente in un profilo strutturato.
+    Identifica le competenze più pertinenti da un vocabolario controllato (JSON)
+    e fornisce una motivazione per ogni scelta, garantendo la spiegabilità.
+    """
+    
     conoscenze_dict = json_data["conoscenze"]
     skills_dict = json_data["skills"]
     attivita_generalizzate_dict = json_data["attivita_generalizzate"]
@@ -227,10 +234,17 @@ def select_best_categories(user_text, json_data):
         )
         return result, usage
     except Exception as e:
-        print(f"❌ Error in select_best_categories: {e}")
+        print(f"Errore in select_best_categories: {e}")
         return None, None
 
 def get_istat_categories():
+    
+    """
+    Interroga l'API di INAPP per recuperare l'elenco ufficiale delle macro-categorie professionali ISTAT.
+    Formatta la risposta JSON in un dizionario pulito e facilmente utilizzabile.
+    Fornisce i dati necessari alla successiva fase di classificazione del profilo utente.
+    """
+    
     url = "https://api.inapp.org/professioni/search.php?idFamiglia=1&idIndice=1&flag=27"
     try:
         response = requests.get(url)
@@ -247,10 +261,18 @@ def get_istat_categories():
                     }
             return istat_categories
     except requests.exceptions.RequestException as e:
-        print(f"❌ Errore nella richiesta API delle categorie ISTAT: {e}")
+        print(f"Errore nella richiesta API delle categorie ISTAT: {e}")
         return {}
 
+@traceable
 def classify_user_category(user_text):
+    
+    """
+    Utilizza l'LLM per classificare il profilo utente nelle due macro-categorie ISTAT più adatte.
+    Il risultato agisce da filtro strategico per le fasi di ricerca successive.
+    Garantisce che le professioni suggerite siano tematicamente pertinenti al profilo.
+    """
+    
     istat_categories = get_istat_categories()
     if not istat_categories: return [], None
 
@@ -282,18 +304,25 @@ def classify_user_category(user_text):
         )
         return categories_list[:2], usage
     except Exception as e:
-        print(f"❌ Error in classify_user_category: {e}")
+        print(f"Errore in classify_user_category: {e}")
         return [], None
 
 def get_explicit_professions(keyword):
+    
+    """
+    Gestisce i casi in cui l'utente menziona esplicitamente una professione.
+    Esegue una ricerca testuale diretta sull'API di INAPP usando la parola chiave fornita.
+    Restituisce una lista di professioni che corrispondono alla ricerca.
+    """
+    
     url = f"https://api.inapp.org/professioni/search.php?flag=26&idFamiglia=1&idIndice=1&compito={keyword}&string=meccanicofulltext=1"
     try:
         response = requests.get(url)
         response.raise_for_status()
         raw_data = response.text
-        clean_data = re.sub(r"<[^>]+>", "", raw_data)
-        clean_data = re.sub(r"\\n|\\t", "", clean_data)
-        clean_data = re.sub(r"[^\x20-\x7E]", "", clean_data)
+        clean_data = re.sub(r"<[^>]+>", "", raw_data) # Rimuove tag HTML
+        clean_data = re.sub(r"\\n|\\t", "", clean_data) # Rimuove caratteri di escape        
+        clean_data = re.sub(r"[^\x20-\x7E]", "", clean_data) # Rimuove caratteri non standard
         clean_data = clean_data.strip()
         try:
             data = json.loads(clean_data)
@@ -305,12 +334,20 @@ def get_explicit_professions(keyword):
         extracted_professions = []
         for key, value in results.items():
             if isinstance(value, dict) and "pkLivello" in value and "desc_livello" in value:
-                extracted_professions.append({"code": value["pkLivello"], "desc": value["desc_livello"], "importanza": 50, "complessita": 50})
+                extracted_professions.append({"code": value["pkLivello"], "desc": value["desc_livello"], "importanza": 50, "complessita": 50}) # 50 valori di deafault per fallback
         return extracted_professions
     except requests.exceptions.RequestException:
         return []
 
-def chiamata_api(category, value):  
+#def chiamata_api(category, value): BARA
+def chiamata_api(value):
+
+    """
+    Esegue una singola chiamata all'API di INAPP per recuperare le professioni associate a una competenza.
+    Questa funzione "operaia" è progettata per essere eseguita in modo concorrente e parallelo.
+    Restituisce il risultato in formato JSON, o None in caso di fallimento della richiesta.
+    """  
+    
     url = "https://api.inapp.org/professioni/search.php"
     params = {"flag": 28, "tipo": 2, "string": value}
     try:
@@ -324,6 +361,13 @@ def chiamata_api(category, value):
         return None
 
 def aggregate_best_jobs(api_results, user_category, w_B, w_C, w_D, w_G):
+    
+    """
+    Aggrega i risultati delle API e li filtra in base alla macro-categoria ISTAT dell'utente.
+    Calcola un punteggio ponderato per ogni professione e ordina la lista per pertinenza.
+    Restituisce le 40 professioni candidate per la fase finale di ranking qualitativo.
+    """
+    
     job_scores = defaultdict(lambda: {"desc": "", "total_score": 0, "importanza": 0, "complessita": 0})
     for category, weight in [("Conoscenze", w_B), ("Skills", w_C), ("attitudini", w_D),("attivita", w_G)]:
         if category in api_results:
@@ -388,6 +432,13 @@ def get_affine_professions(profession_codes):
     return affine_professions
 
 def rank_professions(user_text, professions):
+    
+    """
+    Esegue il ranking qualitativo finale, utilizzando l'LLM come un consulente di carriera.
+    Assegna un punteggio di pertinenza e una motivazione personalizzata a ogni professione.
+    Seleziona e restituisce le 5 professioni più adatte per il report finale.
+    """
+    
     if not professions: return [], None
 
     formatted_professions = "\n".join([f"{job['code']}: {job['desc']} (importanza: {job['importanza']}, complessità: {job['complessita']})" for job in professions])
@@ -433,10 +484,17 @@ def rank_professions(user_text, professions):
         )
         return ranked_professions[:5], usage
     except Exception as e:
-        print(f"❌ Error in rank_professions: {e}")
+        print(f"Errore in rank_professions: {e}")
         return [], None
 
 def perform_fairness_audit(user_text, ranked_professions):
+    
+    """
+    Esegue un audit etico su ciascuna delle 5 professioni finali.
+    Utilizza l'LLM per identificare potenziali bias o barriere d'accesso (genere, età, background).
+    Arricchisce i risultati con un'analisi di fairness per garantire suggerimenti responsabili.
+    """
+    
     audited_professions = []
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0}
     
@@ -482,7 +540,7 @@ def perform_fairness_audit(user_text, ranked_professions):
                 total_usage["completion_tokens"] += usage_info.get('completion_tokens', 0)
 
         except Exception as e:
-            print(f"❌ Errore durante l'audit di fairness per '{profession_desc}': {e}")
+            print(f"Errore durante l'audit di fairness per '{profession_desc}': {e}")
             profession['fairness_audit'] = {"potential_bias_summary": "Errore durante l'analisi di fairness.", "affected_subgroups": [], "reasoning": str(e)}
         
         audited_professions.append(profession)
@@ -535,7 +593,7 @@ def validate_user_input(full_user_text):
         result = json.loads(response.content)
         return result
     except Exception as e:
-        print(f"❌ Errore durante la validazione dell'input: {e}")
+        print(f"Errore durante la validazione dell'input: {e}")
         return {"is_sufficient": True, "feedback": "Controllo di validazione saltato a causa di un errore."}
 
 # --- FUNZIONE PRINCIPALE DELLA PIPELINE --- #
@@ -580,8 +638,7 @@ def run_full_analysis_pipeline(user_input_text, force_fallback=False):
         if force_fallback:
             print(">>> TEST MODE: Fallback forzato attivo. <<<")
         else:
-            # Altrimenti, eseguiamo il normale tentativo API, protetto da un blocco try/except
-            # Altrimenti, eseguiamo il normale tentativo API in PARALLELO
+            # Altrimenti, eseguiamo il normale tentativo API in PARALLELO, protetto da un blocco try/except
             try:
                 api_results = defaultdict(dict)
                 tasks_to_run = []
@@ -594,7 +651,8 @@ def run_full_analysis_pipeline(user_input_text, force_fallback=False):
                                             ("attivita", selected_categories["best_attivita"])]:
                         for value in values[:2]:
                             # Sottomettiamo il task e salviamo il "future" insieme ai suoi metadati
-                            future = executor.submit(chiamata_api, category, value)
+                            # future = executor.submit(chiamata_api, category, value) BARA
+                            future = executor.submit(chiamata_api, value)
                             tasks_to_run.append({"type": "category", "category": category, "value": value, "future": future})
 
                     # 2. Sottomettiamo anche la chiamata per la keyword esplicita, se presente
@@ -624,7 +682,7 @@ def run_full_analysis_pipeline(user_input_text, force_fallback=False):
                         print(f"Chiamata API per keyword esplicita '{explicit_job_keyword}' fallita: {e}")
 
             except Exception as api_error:
-                print(f"❌ Errore durante le chiamate API INAPP: {api_error}. Si attiva il fallback.")
+                print(f"Errore durante le chiamate API INAPP: {api_error}. Si attiva il fallback.")
                 best_professions = [] # In caso di errore, ci assicuriamo che la lista sia vuota per attivare il fallback
 
         # Controllo e attivazione del fallback se la lista è vuota (per errore API, nessun risultato o test forzato)
@@ -654,7 +712,7 @@ def run_full_analysis_pipeline(user_input_text, force_fallback=False):
 
         except Exception as e:
             # Se si verifica un errore di qualsiasi tipo, si attiva il fallback locale
-            print(f"❌ API per professioni affini non disponibile ({e}). Attivazione fallback locale.")
+            print(f"API per professioni affini non disponibile ({e}). Attivazione fallback locale.")
             affine_professions = get_affine_professions_locally(main_profession_codes)
         
         # 2. Calcolo costo hardcodato per il fe, se si intende ottenere un dettaglio dinamico inserire la porpria chiave lang smith 

@@ -121,7 +121,7 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
   streamlit run app_streamlit.py
   ```
 
-## Attenzione a deployare le variabili nell'env attraverso
+## Attenzione a popolare le variabili nell'env:
 
 #### Chiave per le API di OpenAI
 
@@ -136,11 +136,11 @@ LANGCHAIN_PROJECT = "Career-Compass-AI"
 
 ---
 
-## 🧠 Approfondimento sul Backend (**backend_analysis.py**)
+## 🧠 Approfondimento sul Backend backend_analysis.py
 
 **Il backend è il cuore dell'applicazione. Espone la funzione** **run_full_analysis_pipeline** **che orchestra una serie di agenti AI e chiamate API.**
 
-### Descrizione Minuziosa delle Funzioni
+### Descrizione delle Funzioni
 
 * **validate_user_input**: Agisce da "gatekeeper", utilizzando un LLM con regole rigide per scartare input di bassa qualità prima di avviare l'analisi costosa.
 * **select_best_categories**: Traduce il testo libero dell'utente in un profilo di competenze standardizzato e spiegabile, obbligando l'IA a motivare ogni scelta.
@@ -185,7 +185,7 @@ LANGCHAIN_PROJECT = "Career-Compass-AI"
 
 ---
 
-## 🖥️ Approfondimento sul Frontend (**app_streamlit.py**)
+## 🖥️ Approfondimento sul Frontend app_streamlit.py
 
 **Il frontend è costruito con Streamlit per essere intuitivo e reattivo, basandosi sulla gestione dello stato di sessione.**
 
