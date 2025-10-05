@@ -339,7 +339,6 @@ def get_explicit_professions(keyword):
     except requests.exceptions.RequestException:
         return []
 
-#def chiamata_api(category, value): BARA
 def chiamata_api(value):
 
     """
@@ -651,7 +650,6 @@ def run_full_analysis_pipeline(user_input_text, force_fallback=False):
                                             ("attivita", selected_categories["best_attivita"])]:
                         for value in values[:2]:
                             # Sottomettiamo il task e salviamo il "future" insieme ai suoi metadati
-                            # future = executor.submit(chiamata_api, category, value) BARA
                             future = executor.submit(chiamata_api, value)
                             tasks_to_run.append({"type": "category", "category": category, "value": value, "future": future})
 

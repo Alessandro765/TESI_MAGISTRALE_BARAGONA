@@ -9,6 +9,14 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 * **BIP (Business Integration Partners):** Un ringraziamento speciale a BIP per il supporto fondamentale al progetto, che include la fornitura del dataset `profession_data.py` (contenente la classificazione ISTAT a 3 digit alla cui realizzazione ho avuto il piacere di contribuire) e della chiave per l'accesso alle API di OpenAI.
 * **ISTAT e INAPP:** L'applicazione utilizza la Classificazione delle Professioni (CP2021) e le API pubbliche fornite da ISTAT e INAPP come fonte primaria per l'analisi e la mappatura delle competenze professionali.
 
+## Certificazione codice
+
+1) Vai alla cartella del progetto: (cd "C:\percorso").
+2) .\venv\Scripts\activate.bat
+3) .\venv\Scripts\python -m sigstore sign NOME_FILE.py --overwrite --signature NOME_FILE.py.sig --certificate NOME_FILE.py.crt
+4) **Verifica**: .\venv\Scripts\python -m sigstore verify identity --cert-identity TUA_EMAIL@gmail.com --cert-oidc-issuer https://github.com/login/oauth --signature NOME_FILE.py.sig --certificate NOME_FILE.py.crt NOME_FILE.py
+
+
 ### Indice
 
 1. FunzionalitàChiave
@@ -61,7 +69,7 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 
 ---
 
-## 🛠️ Tech Stack e Dipendenze
+## 🛠️ Dipendenze
 
 | **Tecnologia**           | **Scopo**                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
