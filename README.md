@@ -16,7 +16,6 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 3) .\venv\Scripts\python -m sigstore sign NOME_FILE.py --overwrite --signature NOME_FILE.py.sig --certificate NOME_FILE.py.crt
 4) **Verifica**: .\venv\Scripts\python -m sigstore verify identity --cert-identity TUA_EMAIL@gmail.com --cert-oidc-issuer https://github.com/login/oauth --signature NOME_FILE.py.sig --certificate NOME_FILE.py.crt NOME_FILE.py
 
-
 ### Indice
 
 1. FunzionalitàChiave
@@ -40,9 +39,7 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 7. Fonti Dati
 8. Esempi di Test
 
----
-
-## ✨ Funzionalità Chiave
+## Funzionalità Chiave
 
 * **Analisi Personalizzata:** **Traduce il racconto informale di un utente in un profilo strutturato di competenze, conoscenze e attitudini.**
 * **Intelligenza Artificiale Responsabile:** **Integra principi di** **Responsible AI** **per mitigare i bias, evitare stereotipi e fornire analisi di fairness trasparenti su ogni suggerimento.**
@@ -51,9 +48,7 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 * **Performance Ottimizzate:** **Sfrutta la** **parallelizzazione** **(**concurrent.futures**) per eseguire chiamate API multiple simultaneamente, riducendo drasticamente i tempi di attesa.**
 * **Monitoraggio Avanzato:** **Integrato con** **LangSmith** **per il tracing end-to-end, il monitoraggio dei costi, della latenza e dei token utilizzati in ogni fase della pipeline.**
 
----
-
-## 🏗️ Architettura del Sistema
+## Architettura del Sistema
 
 **Il sistema segue un flusso logico chiaro, orchestrando diverse tecnologie per fornire un'analisi completa:**
 
@@ -67,9 +62,7 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 * **Backend** **→ Restituisce un unico dizionario JSON con i risultati completi al** **Frontend**.
 * **Streamlit Frontend** **→ Visualizza i risultati in un report interattivo e facile da consultare nella sidebar.**
 
----
-
-## 🛠️ Dipendenze
+## Dipendenze
 
 | **Tecnologia**           | **Scopo**                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
@@ -80,9 +73,7 @@ Questo progetto si basa su dati e servizi di alta qualità forniti da diverse fo
 | **Requests**             | **Esecuzione delle chiamate HTTP alle API esterne di INAPP.**                                  |
 | **Dotenv**               | **Gestione delle variabili d'ambiente e delle chiavi API in locale.**                          |
 
----
-
-## 🚀 Setup e Installazione
+## Setup e Installazione
 
 * **Clonare il Repository**
 
@@ -142,9 +133,7 @@ LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
 LANGCHAIN_API_KEY = "codice chiave LangSmith"
 LANGCHAIN_PROJECT = "Career-Compass-AI"
 
----
-
-## 🧠 Approfondimento sul Backend backend_analysis.py
+## Approfondimento sul Backend backend_analysis.py
 
 **Il backend è il cuore dell'applicazione. Espone la funzione** **run_full_analysis_pipeline** **che orchestra una serie di agenti AI e chiamate API.**
 
@@ -157,14 +146,14 @@ LANGCHAIN_PROJECT = "Career-Compass-AI"
 * **rank_professions**: Agisce come un consulente di orientamento AI, applicando un giudizio qualitativo e assegnando un punteggio finale di pertinenza.
 * **perform_fairness_audit**: Esegue un'analisi critica dei potenziali bias per ogni professione suggerita, identificando sottogruppi specifici che potrebbero incontrare barriere.
 
-### ⚡ Ottimizzazione delle Performance (Chiamate API Parallele)
+### Ottimizzazione delle Performance (Chiamate API Parallele)
 
 **Per ridurre la latenza, le chiamate all'API esterna di INAPP, che sono numerose e sequenziali per natura, sono state parallelizzate utilizzando la libreria** **concurrent.futures.ThreadPoolExecutor**.
 
 * **Problema:** **L'attesa totale era la** **somma** **dei tempi di ogni singola chiamata API.**
 * **Soluzione:** **Le chiamate vengono sottomesse a un pool di thread e èseguite simultaneamente. L'attesa totale è ora pari al tempo della singola chiamata più lenta, con una** **riduzione drastica del tempo di attesa complessivo**.
 
-### 📈 Monitoraggio e Tracing con LangSmith
+### Monitoraggio e Tracing con LangSmith
 
 **L'applicazione è completamente integrata con LangSmith per garantire osservabilità e manutenibilità.**
 
@@ -179,7 +168,7 @@ LANGCHAIN_PROJECT = "Career-Compass-AI"
   * **Controllo dei Costi:** **Monitoraggio preciso del numero di token e del costo stimato per ogni analisi.**
   * **Debug:** **Ispezione completa dei prompt inviati e delle risposte ricevute per ogni passaggio.**
 
-### 🛡️ Meccanismo di Fallback per la Ricerca delle Professioni
+### Meccanismo di Fallback per la Ricerca delle Professioni
 
 **Il sistema è progettato per essere resiliente. Se le API INAPP falliscono o non restituiscono risultati, si attiva automaticamente un percorso di emergenza.**
 
@@ -191,9 +180,7 @@ LANGCHAIN_PROJECT = "Career-Compass-AI"
   * **Continuità della Pipeline**: I risultati del fallback vengono re-iniettati nel flusso di analisi, che prosegue senza interruzioni.
 * **Test:** **È possibile forzare l'attivazione del fallback per scopi di debug tramite il checkbox** **🧪 Forzare test di fallback** **nella sidebar.**
 
----
-
-## 🖥️ Approfondimento sul Frontend app_streamlit.py
+## Approfondimento sul Frontend app_streamlit.py
 
 **Il frontend è costruito con Streamlit per essere intuitivo e reattivo, basandosi sulla gestione dello stato di sessione.**
 
@@ -222,18 +209,14 @@ LANGCHAIN_PROJECT = "Career-Compass-AI"
 * **🧠 Il Ragionamento dell'IA**: La sezione dedicata alla spiegabilità, che mostra le competenze estratte e le relative motivazioni.
 * **⚙️ Dati di Classificazione**: Riporta dettagli tecnici come le macro-categorie ISTAT e le statistiche di utilizzo (token e costo) tracciate da LangSmith.
 
----
-
-## 📚 Fonti dei Dati
+## Fonti dei Dati
 
 **L'applicazione si basa su diverse fonti di dati per la sua analisi:**
 
 * **File JSON (**/JSON**)**: Contengono le tassonomie di **conoscenze, skills, attitudini e attività generalizzate**. Vengono utilizzati dall'IA come vocabolario controllato per standardizzare il profilo utente.
 * **Database Locale (**profession_data.py**)**: Questo file contiene un dizionario Python (**PROFESSIONI_ISTAT_3_DIGIT**) che mappa i codici ISTAT a 3 digit a schede descrittive complete (nome, descrizione, esempi, formazione, mercato). Viene utilizzato come fonte dati primaria durante il **meccanismo di fallback**.
 
----
-
-## 🧪 Esempi di Test
+## Esempi di Test
 
 **Per validare il sistema, utilizzare profili utente:**
 
