@@ -1,6 +1,6 @@
 # 🧭 Career Compass AI: Documentazione Tecnica Completa
 
-Career Compass AI è un'applicazione web avanzata progettata per fornire orientamento professionale personalizzato, etico e spiegabile. Partendo da una descrizione testuale libera fornita dall'utente, il sistema sfrutta un'architettura a due componenti un potente motore di analisi (backend) e un'interfaccia utente interattiva (frontend) per suggerire le professioni più adatte secondo la classificazione ISTAT.
+Career Compass AI è un'applicazione web avanzata progettata da Baragona Alessandro per fornire orientamento professionale personalizzato, etico e spiegabile. Partendo da una descrizione testuale libera fornita dall'utente, il sistema sfrutta un'architettura a due componenti un potente motore di analisi (backend) e un'interfaccia utente interattiva (frontend) per suggerire le professioni più adatte secondo la classificazione ISTAT.
 
 ## Fonti e Ringraziamenti
 
